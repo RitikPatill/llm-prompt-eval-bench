@@ -1,0 +1,24 @@
+name: smoke test suite
+description: Fixture for unit tests
+
+cases:
+  - id: exact-hello
+    input: "Say hello"
+    expected: "hello"
+    models:
+      - openai/gpt-4o-mini
+    scorer: exact_match
+
+  - id: regex-digits
+    input: "Give me a 4-digit number"
+    expected: "^\\d{4}$"
+    models:
+      - anthropic/claude-haiku-4-5-20251001
+    scorer: regex
+
+  - id: judge-haiku
+    input: "Write a haiku about autumn"
+    models:
+      - openai/gpt-4o-mini
+      - anthropic/claude-haiku-4-5-20251001
+    scorer: llm_judge
