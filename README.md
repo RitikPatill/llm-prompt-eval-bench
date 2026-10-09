@@ -13,22 +13,24 @@ No cloud account required. No opaque framework. Just a YAML file and a single co
 
 ## Status
 
-**M2 — yaml schema + loader (current)**
+**M3 — multi-model runner (current)**
 
 | Deliverable | State |
 |---|---|
 | `pyproject.toml` with entry point `eval` | done |
 | `requirements.txt` / `requirements-dev.txt` | done |
 | MIT `LICENSE` | done |
-| `src/eval_bench/cli.py` — `eval run` and `eval report` registered | stub |
-| `tests/` scaffold | done |
+| `src/eval_bench/cli.py` — `eval run` with Rich progress bar | done |
 | `src/eval_bench/schema.py` — Pydantic v2 models (`EvalCase`, `EvalSuite`) | done |
 | `src/eval_bench/loader.py` — `load_suite(path)` function | done |
+| `src/eval_bench/runner.py` — async runner, `RunResult`, `run_suite()` | done |
 | `tests/fixtures/simple_suite.yaml` — fixture covering all three scorer types | done |
 | `tests/test_schema_loader.py` — 7 unit tests, all passing | done |
+| `tests/test_runner.py` — 7 runner unit tests (mocked, no real API calls) | done |
 
-The `eval run` and `eval report` commands are wired and importable; they print
-`not yet implemented` until the runner is implemented in a future milestone.
+`eval run suite.yaml` now fans out all `(case, model)` pairs concurrently,
+calls the real OpenAI or Anthropic API, and streams a Rich progress bar.
+A summary table (case_id / model / latency_ms / status) is printed at the end.
 
 ## Quick-start
 
@@ -54,7 +56,7 @@ cases:
     scorer: exact_match
 EOF
 
-# Run the evaluation  (not yet implemented — future milestone)
+# Run the evaluation
 eval run suite.yaml
 
 # Re-open the last report  (not yet implemented — future milestone)
@@ -100,7 +102,7 @@ Models are specified as `provider/name`, e.g.:
 
 ## Scorers
 
-[TODO M3 — documentation for `exact_match`, `regex`, and `llm_judge` scorers]
+[TODO M4 — documentation for `exact_match`, `regex`, and `llm_judge` scorers]
 
 ## Report output
 
@@ -112,7 +114,7 @@ Components marked `[done]` are implemented and tested. The rest are planned.
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  CLI  (eval run / eval report)          [stub]      │
+│  CLI  (eval run / eval report)          [done]      │
 │  src/eval_bench/cli.py                              │
 └────────────────────┬────────────────────────────────┘
                      │ path to suite.yaml
@@ -125,10 +127,11 @@ Components marked `[done]` are implemented and tested. The rest are planned.
                      │ List[EvalCase]
                      ▼
 ┌─────────────────────────────────────────────────────┐
-│  Runner                                 [planned]   │
+│  Runner                                 [done]      │
+│  src/eval_bench/runner.py  — run_suite(), RunResult │
 │  • iterates (test_case × model) combinations        │
-│  • calls OpenAI / Anthropic SDKs                   │
-│  • rich progress bar                               │
+│  • calls OpenAI / Anthropic SDKs async             │
+│  • rich progress bar, concurrency semaphore         │
 └────────────┬──────────────────┬─────────────────────┘
              │                  │
              ▼                  ▼
@@ -146,9 +149,10 @@ Components marked `[done]` are implemented and tested. The rest are planned.
 |---|---|
 | M1 — scaffold | repo init, CLI stubs, dependency pinning (done) |
 | M2 — yaml schema + loader | Pydantic models, `load_suite()`, unit tests (done) |
-| M3 — scorers | `exact_match`, `regex`, `llm_judge` |
-| M4 — reporter | static HTML report, JSON artifact, diff highlighting |
-| M5 — polish | `eval diff`, caching, CI smoke test |
+| M3 — multi-model runner | async runner, Rich progress bar, RunResult (done) |
+| M4 — scorers | `exact_match`, `regex`, `llm_judge` |
+| M5 — reporter | static HTML report, JSON artifact, diff highlighting |
+| M6 — polish | `eval diff`, caching, CI smoke test |
 
 ## Contributing
 
