@@ -13,7 +13,7 @@ No cloud account required. No opaque framework. Just a YAML file and a single co
 
 ## Status
 
-**M3 — multi-model runner (current)**
+**M4 — scorers (current)**
 
 | Deliverable | State |
 |---|---|
@@ -24,12 +24,16 @@ No cloud account required. No opaque framework. Just a YAML file and a single co
 | `src/eval_bench/schema.py` — Pydantic v2 models (`EvalCase`, `EvalSuite`) | done |
 | `src/eval_bench/loader.py` — `load_suite(path)` function | done |
 | `src/eval_bench/runner.py` — async runner, `RunResult`, `run_suite()` | done |
+| `src/eval_bench/scorers.py` — `exact_match`, `regex`, `llm_judge` scorers | done |
+| `RunResult.score` and `RunResult.rationale` fields | done |
 | `tests/fixtures/simple_suite.yaml` — fixture covering all three scorer types | done |
 | `tests/test_schema_loader.py` — 7 unit tests, all passing | done |
 | `tests/test_runner.py` — 7 runner unit tests (mocked, no real API calls) | done |
+| `tests/test_scorers.py` — 11 scorer unit tests (mocked, no real API calls) | done |
 
 `eval run suite.yaml` now fans out all `(case, model)` pairs concurrently,
-calls the real OpenAI or Anthropic API, and streams a Rich progress bar.
+calls the real OpenAI or Anthropic API, streams a Rich progress bar, and
+scores every result inline using the configured scorer.
 A summary table (case_id / model / latency_ms / status) is printed at the end.
 
 ## Quick-start
@@ -102,11 +106,23 @@ Models are specified as `provider/name`, e.g.:
 
 ## Scorers
 
-[TODO M4 — documentation for `exact_match`, `regex`, and `llm_judge` scorers]
+Every `EvalCase` specifies a `scorer` that grades the model's output. After
+`run_suite` completes, each `RunResult` has a `score` (float) and `rationale`
+(string) field.
+
+| Scorer | `expected` field | Score range | Description |
+|---|---|---|---|
+| `exact_match` | required | 0.0 or 1.0 | Case-sensitive string equality after stripping whitespace |
+| `regex` | required | 0.0 or 1.0 | `re.search(expected, output)` — any match → 1.0 |
+| `llm_judge` | optional | 1.0 – 5.0 | A small model (`gpt-4o-mini` / `claude-haiku-4-5-20251001`) grades the output 1–5 |
+
+`llm_judge` uses a structured grading prompt and parses the first `[1-5]`
+digit from the response. It prefers an `openai` client if available, falls
+back to `anthropic`, and instantiates `AsyncOpenAI()` if neither is supplied.
 
 ## Report output
 
-[TODO M4 — description of the static HTML report and JSON artifact]
+[TODO M5 — description of the static HTML report and JSON artifact]
 
 ## Architecture
 
@@ -136,7 +152,7 @@ Components marked `[done]` are implemented and tested. The rest are planned.
              │                  │
              ▼                  ▼
 ┌────────────────────┐  ┌───────────────────────────┐
-│  Scorers [planned] │  │  Reporter       [planned] │
+│  Scorers  [done]   │  │  Reporter       [planned] │
 │  • exact_match     │  │  • static HTML report     │
 │  • regex           │  │  • JSON artifact          │
 │  • llm_judge       │  │  • diff highlighting      │
@@ -150,7 +166,7 @@ Components marked `[done]` are implemented and tested. The rest are planned.
 | M1 — scaffold | repo init, CLI stubs, dependency pinning (done) |
 | M2 — yaml schema + loader | Pydantic models, `load_suite()`, unit tests (done) |
 | M3 — multi-model runner | async runner, Rich progress bar, RunResult (done) |
-| M4 — scorers | `exact_match`, `regex`, `llm_judge` |
+| M4 — scorers | `exact_match`, `regex`, `llm_judge` (done) |
 | M5 — reporter | static HTML report, JSON artifact, diff highlighting |
 | M6 — polish | `eval diff`, caching, CI smoke test |
 
