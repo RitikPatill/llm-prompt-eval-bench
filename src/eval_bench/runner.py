@@ -15,6 +15,8 @@ class RunResult(BaseModel):
     output: str | None
     error: str | None
     latency_ms: float
+    score: float | None = None
+    rationale: str | None = None
 
 
 async def _call_openai(model_name: str, prompt: str, client: Any) -> tuple[str, float]:
@@ -89,6 +91,17 @@ async def run_suite(
                     error=None,
                     latency_ms=latency_ms,
                 )
+                try:
+                    from eval_bench.scorers import score as compute_score
+                    sc, rationale = await compute_score(
+                        case, output,
+                        openai_client=openai_client,
+                        anthropic_client=anthropic_client,
+                    )
+                    result.score = sc
+                    result.rationale = rationale
+                except Exception as score_exc:
+                    result.rationale = f"scorer error: {score_exc}"
             except Exception as exc:
                 result = RunResult(
                     case_id=case_id,
