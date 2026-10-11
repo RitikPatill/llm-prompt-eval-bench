@@ -1,199 +1,156 @@
-# llm-prompt-eval-bench
+# LLM Prompt Eval Bench
 
-> One YAML file. One command. One report.
+> A lightweight CLI tool to define, run, and diff LLM prompt evaluations across models, with scored HTML reports.
 
-## What it does
+![demo](demo/demo.gif)
 
-`llm-prompt-eval-bench` is a lightweight, local evaluation harness for LLM prompts.
-You define test cases in a YAML file — each with an input, an expected output or rubric,
-and a list of models to run against — and the tool runs all combinations, scores them,
-and emits a static HTML report plus a JSON artifact.
+## What it is
 
-No cloud account required. No opaque framework. Just a YAML file and a single command.
+`llm-prompt-eval-bench` is a local evaluation harness for LLM prompts. You write test cases in a
+YAML file — each with an input, an expected output or rubric, and a list of models to run against —
+and the tool fans out all `(case, model)` pairs concurrently, scores each result, and saves a static
+HTML report plus a JSON artifact to `.eval_reports/`.
 
-## Status
+It supports three scorer types: exact string match, regex match, and `llm_judge` (a small model
+grades outputs 1–5). Both OpenAI and Anthropic models are supported via their official SDKs. No
+cloud account beyond API keys, no persistent server, no framework lock-in.
 
-**M5 — HTML report + JSON artifact (current)**
-
-| Deliverable | State |
-|---|---|
-| `pyproject.toml` with entry point `eval` | done |
-| `requirements.txt` / `requirements-dev.txt` | done |
-| MIT `LICENSE` | done |
-| `src/eval_bench/cli.py` — `eval run` with Rich progress bar | done |
-| `src/eval_bench/schema.py` — Pydantic v2 models (`EvalCase`, `EvalSuite`) | done |
-| `src/eval_bench/loader.py` — `load_suite(path)` function | done |
-| `src/eval_bench/runner.py` — async runner, `RunResult`, `run_suite()` | done |
-| `src/eval_bench/scorers.py` — `exact_match`, `regex`, `llm_judge` scorers | done |
-| `RunResult.score` and `RunResult.rationale` fields | done |
-| `src/eval_bench/reporter.py` — `build_report_data()`, `save_report()` | done |
-| `eval run` saves `run_<ts>.json` + `run_<ts>.html` to `.eval_reports/` | done |
-| `eval report last` opens the most recent HTML in the system browser | done |
-| HTML report: summary table, expandable per-case rows, divergence highlighting | done |
-| `tests/fixtures/simple_suite.yaml` — fixture covering all three scorer types | done |
-| `tests/test_schema_loader.py` — 7 unit tests, all passing | done |
-| `tests/test_runner.py` — 7 runner unit tests (mocked, no real API calls) | done |
-| `tests/test_scorers.py` — 11 scorer unit tests (mocked, no real API calls) | done |
-| `tests/test_reporter.py` — 9 reporter unit tests (no real API calls) | done |
-
-`eval run suite.yaml` now fans out all `(case, model)` pairs concurrently,
-scores every result inline, and saves a static HTML report plus a JSON
-artifact into `.eval_reports/`. Run `eval report last` to open the report.
-
-## Quick-start
+## Quickstart
 
 Requires Python >= 3.10.
 
 ```bash
-# Install
+git clone https://github.com/RitikPatill/llm-prompt-eval-bench.git
+cd llm-prompt-eval-bench
+python -m venv .venv && source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -e .
 
-# Verify the CLI is registered
-eval --help
+# Set API keys for the providers you plan to use
+export OPENAI_API_KEY=sk-...
+export ANTHROPIC_API_KEY=sk-ant-...
 
-# Write your eval suite
-cat > suite.yaml << 'EOF'
-name: my eval suite
+# Run the bundled demo suite (3 cases, 2 models)
+eval run examples/demo_suite.yaml
 
-cases:
-  - id: greeting
-    input: "Say hello"
-    expected: "hello"
-    models:
-      - openai/gpt-4o-mini
-    scorer: exact_match
-EOF
-
-# Run the evaluation
-eval run suite.yaml
-
-# Open the last report in your browser
+# Open the report in your browser
 eval report last
 ```
 
-Set your API keys before running:
+## Usage
 
-```bash
-export OPENAI_API_KEY=sk-...
-export ANTHROPIC_API_KEY=sk-ant-...
-```
-
-## Suite YAML format
+Define a suite in YAML:
 
 ```yaml
-name: <string>            # required — human label for the suite
-description: <string>     # optional
+name: my suite
 
 cases:
-  - id: <string>          # optional — human label for the case
-    input: <string>       # required — prompt sent to the model
-    expected: <string>    # required for exact_match and regex; optional for llm_judge
-    models:               # required — list of model strings (provider/name)
+  - id: greeting
+    input: "Reply with exactly the word: hello"
+    expected: "hello"
+    models:
       - openai/gpt-4o-mini
       - anthropic/claude-haiku-4-5-20251001
-    scorer: <scorer>      # required — one of: exact_match, regex, llm_judge
+    scorer: exact_match
+
+  - id: year-check
+    input: "What year did World War 2 end? Reply with only the 4-digit year."
+    expected: "^\\d{4}$"
+    models:
+      - openai/gpt-4o-mini
+    scorer: regex
+
+  - id: open-ended
+    input: "Write a haiku about debugging code."
+    models:
+      - openai/gpt-4o-mini
+      - anthropic/claude-haiku-4-5-20251001
+    scorer: llm_judge
 ```
 
-### Scorer types
+Run it with `eval run suite.yaml`. Two files are written to `.eval_reports/`:
+- `run_<timestamp>.html` — summary table, expandable per-case rows, divergence highlighting
+- `run_<timestamp>.json` — same data, machine-readable
 
-| Scorer | `expected` field | Description |
-|---|---|---|
-| `exact_match` | required | Case-sensitive string equality |
-| `regex` | required | Python `re.search` against the model output |
-| `llm_judge` | optional | A small model grades the output 1–5 |
+`eval report last` opens the most recent HTML in your system browser.
+
+### Scorer reference
+
+| Scorer | `expected` | Score | Description |
+|---|---|---|---|
+| `exact_match` | required | 0.0 or 1.0 | Case-sensitive equality after whitespace strip |
+| `regex` | required | 0.0 or 1.0 | `re.search(expected, output)` |
+| `llm_judge` | optional | 1.0 – 5.0 | Small model grades the output 1–5 |
 
 ### Model strings
 
-Models are specified as `provider/name`, e.g.:
-- `openai/gpt-4o-mini`
-- `anthropic/claude-haiku-4-5-20251001`
+Prefix with `openai/` or `anthropic/`. Any model name the respective SDK accepts works:
 
-## Scorers
-
-Every `EvalCase` specifies a `scorer` that grades the model's output. After
-`run_suite` completes, each `RunResult` has a `score` (float) and `rationale`
-(string) field.
-
-| Scorer | `expected` field | Score range | Description |
-|---|---|---|---|
-| `exact_match` | required | 0.0 or 1.0 | Case-sensitive string equality after stripping whitespace |
-| `regex` | required | 0.0 or 1.0 | `re.search(expected, output)` — any match → 1.0 |
-| `llm_judge` | optional | 1.0 – 5.0 | A small model (`gpt-4o-mini` / `claude-haiku-4-5-20251001`) grades the output 1–5 |
-
-`llm_judge` uses a structured grading prompt and parses the first `[1-5]`
-digit from the response. It prefers an `openai` client if available, falls
-back to `anthropic`, and instantiates `AsyncOpenAI()` if neither is supplied.
-
-## Report output
-
-After every `eval run`, two files are written to `.eval_reports/`:
-
-| File | Description |
-|---|---|
-| `run_<timestamp>.html` | Static HTML report — open in any browser |
-| `run_<timestamp>.json` | JSON artifact — machine-readable, same shape as the HTML data |
-
-The HTML report contains:
-- **Summary table** — per-model average score and average latency
-- **Expandable case rows** — raw model output, score, and rationale for each `(case, model)` pair
-- **Divergence highlighting** — cases where two models return different outputs are visually flagged with a yellow background
-
-Run `eval report last` to open the most recent report in your system browser.
+```
+openai/gpt-4o-mini
+openai/gpt-4o
+anthropic/claude-haiku-4-5-20251001
+anthropic/claude-sonnet-4-6
+```
 
 ## Architecture
 
-Components marked `[done]` are implemented and tested. The rest are planned.
+```
+┌──────────────────────────────────────┐
+│  CLI  (eval run / eval report)       │
+│  cli.py                              │
+└──────────────────┬───────────────────┘
+                   │ suite path
+                   ▼
+┌──────────────────────────────────────┐
+│  Schema + Loader                     │
+│  schema.py — EvalCase, EvalSuite     │
+│  loader.py — load_suite(path)        │
+└──────────────────┬───────────────────┘
+                   │ List[EvalCase]
+                   ▼
+┌──────────────────────────────────────┐
+│  Runner  (async, concurrent)         │
+│  runner.py — run_suite(), RunResult  │
+└────────────┬─────────────────────────┘
+             │ List[RunResult]
+       ┌─────┴──────┐
+       ▼            ▼
+┌────────────┐  ┌──────────────────────┐
+│  Scorers   │  │  Reporter            │
+│  exact_match  │  HTML + JSON output  │
+│  regex     │  │  diff highlighting   │
+│  llm_judge │  └──────────────────────┘
+└────────────┘
+```
+
+## Project structure
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  CLI  (eval run / eval report)          [done]      │
-│  src/eval_bench/cli.py                              │
-└────────────────────┬────────────────────────────────┘
-                     │ path to suite.yaml
-                     ▼
-┌─────────────────────────────────────────────────────┐
-│  Schema + Loader                        [done]      │
-│  src/eval_bench/schema.py  — EvalCase, EvalSuite    │
-│  src/eval_bench/loader.py  — load_suite(path)       │
-└────────────────────┬────────────────────────────────┘
-                     │ List[EvalCase]
-                     ▼
-┌─────────────────────────────────────────────────────┐
-│  Runner                                 [done]      │
-│  src/eval_bench/runner.py  — run_suite(), RunResult │
-│  • iterates (test_case × model) combinations        │
-│  • calls OpenAI / Anthropic SDKs async             │
-│  • rich progress bar, concurrency semaphore         │
-└────────────┬──────────────────┬─────────────────────┘
-             │                  │
-             ▼                  ▼
-┌────────────────────┐  ┌───────────────────────────┐
-│  Scorers  [done]   │  │  Reporter         [done]  │
-│  • exact_match     │  │  • static HTML report     │
-│  • regex           │  │  • JSON artifact          │
-│  • llm_judge       │  │  • diff highlighting      │
-└────────────────────┘  └───────────────────────────┘
+llm-prompt-eval-bench/
+├── src/eval_bench/       # library source: cli, schema, loader, runner, scorers, reporter
+├── tests/                # 34 unit tests (all mocked, no API keys required)
+├── examples/             # demo_suite.yaml — 3-case runnable example
+├── demo/                 # demo.gif + demo.tape (VHS script to regenerate GIF)
+├── pyproject.toml        # package config, entry point: eval
+├── requirements.txt      # pinned runtime deps
+└── requirements-dev.txt  # pinned dev deps (pytest, ruff)
 ```
 
 ## Roadmap
 
-| Milestone | Scope |
-|---|---|
-| M1 — scaffold | repo init, CLI stubs, dependency pinning (done) |
-| M2 — yaml schema + loader | Pydantic models, `load_suite()`, unit tests (done) |
-| M3 — multi-model runner | async runner, Rich progress bar, RunResult (done) |
-| M4 — scorers | `exact_match`, `regex`, `llm_judge` (done) |
-| M5 — reporter | static HTML report, JSON artifact, diff highlighting (done) |
-| M6 — polish | `eval diff`, caching, CI smoke test |
-
-## Contributing
-
-1. Fork the repo and create a feature branch.
-2. Install dev dependencies: `pip install -e ".[dev]"`
-3. Run tests: `pytest`
-4. Lint: `ruff check src tests`
-5. Open a pull request.
+- [ ] CSV and JSONL dataset loaders so inline YAML examples are not required for large suites
+- [ ] `eval diff run_a.json run_b.json` command to compare two runs side by side
+- [ ] `--concurrency` flag and configurable per-suite timeout
+- [ ] Local model support via Ollama for offline / GPU-free evaluation
+- [ ] GitHub Actions workflow to run evals on every PR and post score deltas as a comment
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+---
+
+Built autonomously by [autodev](https://github.com/RitikPatill/autodev),
+a multi-agent orchestrator I designed. Each commit in this repo was
+authored by me; the implementation work was performed by Sonnet under
+the orchestrator's control. Read the orchestrator's README to see how.
