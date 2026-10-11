@@ -43,11 +43,28 @@ def run(suite_path: str = typer.Argument(..., help="Path to the eval suite YAML.
 
     _print_summary(results)
 
+    from eval_bench.reporter import save_report
+    json_path, html_path = save_report(suite, list(results))
+    rprint(f"[bold]Report:[/bold] {html_path}")
+    rprint(f"[bold]JSON:[/bold]   {json_path}")
+
 
 @app.command()
-def report(target: str = typer.Argument("last", help="Report to open (use 'last').")):
-    """Open a previously generated evaluation report."""
-    print("not yet implemented")
+def report(target: str = typer.Argument("last", help="'last' opens the most recent report.")):
+    """Open a previously generated evaluation report in the browser."""
+    import webbrowser
+    from pathlib import Path
+    reports_dir = Path(".eval_reports")
+    if not reports_dir.exists():
+        typer.echo("No reports found. Run 'eval run <suite>' first.", err=True)
+        raise typer.Exit(1)
+    html_files = sorted(reports_dir.glob("*.html"))
+    if not html_files:
+        typer.echo("No HTML reports in .eval_reports/.", err=True)
+        raise typer.Exit(1)
+    path = html_files[-1]   # lexicographic sort = chronological due to timestamp prefix
+    typer.echo(f"Opening {path}")
+    webbrowser.open(path.resolve().as_uri())
 
 
 if __name__ == "__main__":
