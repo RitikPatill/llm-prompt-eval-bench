@@ -13,7 +13,7 @@ No cloud account required. No opaque framework. Just a YAML file and a single co
 
 ## Status
 
-**M4 — scorers (current)**
+**M5 — HTML report + JSON artifact (current)**
 
 | Deliverable | State |
 |---|---|
@@ -26,15 +26,19 @@ No cloud account required. No opaque framework. Just a YAML file and a single co
 | `src/eval_bench/runner.py` — async runner, `RunResult`, `run_suite()` | done |
 | `src/eval_bench/scorers.py` — `exact_match`, `regex`, `llm_judge` scorers | done |
 | `RunResult.score` and `RunResult.rationale` fields | done |
+| `src/eval_bench/reporter.py` — `build_report_data()`, `save_report()` | done |
+| `eval run` saves `run_<ts>.json` + `run_<ts>.html` to `.eval_reports/` | done |
+| `eval report last` opens the most recent HTML in the system browser | done |
+| HTML report: summary table, expandable per-case rows, divergence highlighting | done |
 | `tests/fixtures/simple_suite.yaml` — fixture covering all three scorer types | done |
 | `tests/test_schema_loader.py` — 7 unit tests, all passing | done |
 | `tests/test_runner.py` — 7 runner unit tests (mocked, no real API calls) | done |
 | `tests/test_scorers.py` — 11 scorer unit tests (mocked, no real API calls) | done |
+| `tests/test_reporter.py` — 9 reporter unit tests (no real API calls) | done |
 
 `eval run suite.yaml` now fans out all `(case, model)` pairs concurrently,
-calls the real OpenAI or Anthropic API, streams a Rich progress bar, and
-scores every result inline using the configured scorer.
-A summary table (case_id / model / latency_ms / status) is printed at the end.
+scores every result inline, and saves a static HTML report plus a JSON
+artifact into `.eval_reports/`. Run `eval report last` to open the report.
 
 ## Quick-start
 
@@ -63,7 +67,7 @@ EOF
 # Run the evaluation
 eval run suite.yaml
 
-# Re-open the last report  (not yet implemented — future milestone)
+# Open the last report in your browser
 eval report last
 ```
 
@@ -122,7 +126,19 @@ back to `anthropic`, and instantiates `AsyncOpenAI()` if neither is supplied.
 
 ## Report output
 
-[TODO M5 — description of the static HTML report and JSON artifact]
+After every `eval run`, two files are written to `.eval_reports/`:
+
+| File | Description |
+|---|---|
+| `run_<timestamp>.html` | Static HTML report — open in any browser |
+| `run_<timestamp>.json` | JSON artifact — machine-readable, same shape as the HTML data |
+
+The HTML report contains:
+- **Summary table** — per-model average score and average latency
+- **Expandable case rows** — raw model output, score, and rationale for each `(case, model)` pair
+- **Divergence highlighting** — cases where two models return different outputs are visually flagged with a yellow background
+
+Run `eval report last` to open the most recent report in your system browser.
 
 ## Architecture
 
@@ -152,7 +168,7 @@ Components marked `[done]` are implemented and tested. The rest are planned.
              │                  │
              ▼                  ▼
 ┌────────────────────┐  ┌───────────────────────────┐
-│  Scorers  [done]   │  │  Reporter       [planned] │
+│  Scorers  [done]   │  │  Reporter         [done]  │
 │  • exact_match     │  │  • static HTML report     │
 │  • regex           │  │  • JSON artifact          │
 │  • llm_judge       │  │  • diff highlighting      │
@@ -167,7 +183,7 @@ Components marked `[done]` are implemented and tested. The rest are planned.
 | M2 — yaml schema + loader | Pydantic models, `load_suite()`, unit tests (done) |
 | M3 — multi-model runner | async runner, Rich progress bar, RunResult (done) |
 | M4 — scorers | `exact_match`, `regex`, `llm_judge` (done) |
-| M5 — reporter | static HTML report, JSON artifact, diff highlighting |
+| M5 — reporter | static HTML report, JSON artifact, diff highlighting (done) |
 | M6 — polish | `eval diff`, caching, CI smoke test |
 
 ## Contributing
